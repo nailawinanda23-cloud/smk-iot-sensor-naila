@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IoT Terminal — Naila Winanda</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     LOGIN VIEW
+     ══════════════════════════════════════════ -->
+<div id="view-login">
+
+  <nav class="login-nav">
+    <div class="nav-logo">
+      <div class="nav-logo-orb">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="5" stroke="#fff" stroke-width="1.6"/>
+          <circle cx="10" cy="3.5" r="1.4" fill="#fff"/>
+          <circle cx="16.5" cy="13.5" r="1.4" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="3.5"  cy="13.5" r="1.4" fill="rgba(255,255,255,0.7)"/>
+        </svg>
+      </div>
+      <div class="nav-logo-text">ESP32 <span>IoT</span> Terminal</div>
+    </div>
+    <div class="nav-ready"><span class="dot"></span>SISTEM SIAP</div>
+  </nav>
+
+  <div class="login-body">
+    <div class="login-inner">
+
+      <!-- Hero Card -->
+      <div class="hero-card">
+        <div class="hero-orb">
+          <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+            <path d="M16 4C9.37 4 4 9.37 4 16s5.37 12 12 12 12-5.37 12-12S22.63 4 16 4z" stroke="#2dd4bf" stroke-width="1.5" fill="none"/>
+            <circle cx="16" cy="16" r="4" fill="#2dd4bf" opacity=".4"/>
+            <circle cx="16" cy="16" r="2" fill="#2dd4bf"/>
+            <path d="M17 9l-5 7h4l-1 7 5-7h-4l1-7z" fill="#38bdf8" opacity=".7"/>
+          </svg>
+        </div>
+        <div class="hero-title">IoT <span>Terminal</span></div>
+        <div class="hero-sub">Sensor Monitor · Real-Time MQTT</div>
+        <div class="hero-chips">
+          <span class="hero-chip">SUHU</span>
+          <span class="hero-chip">KELEMBAPAN</span>
+          <span class="hero-chip">PENCAHAYAAN</span>
+        </div>
+      </div>
+
+      <!-- Info Card -->
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-label">Nama</span>
+          <span class="info-val">Naila Winanda Nurpratama</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Kelas</span>
+          <span class="info-val">XII SIJA B</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Kelompok</span>
+          <span class="kel-badge">// KELOMPOK 6 //</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Proyek</span>
+          <span class="info-val">IoT Sensor Monitor</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Broker</span>
+          <span class="info-val">HiveMQ Cloud</span>
+        </div>
+      </div>
+
+      <!-- Enter Button -->
+      <button class="enter-btn" onclick="goToDashboard()">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        MASUK KE DASHBOARD
+      </button>
+
+      <div class="login-footer">smk / iot / sensor &nbsp;·&nbsp; 2026</div>
+
+    </div>
+  </div>
+</div><!-- /view-login -->
+
+
+<!-- ══════════════════════════════════════════
+     DASHBOARD VIEW
+     ══════════════════════════════════════════ -->
+<div id="view-dashboard" class="hidden">
+
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-brand-orb">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="4" stroke="#fff" stroke-width="1.5"/>
+          <circle cx="10" cy="3"  r="1.3" fill="#fff"/>
+          <circle cx="17" cy="14" r="1.3" fill="rgba(255,255,255,.7)"/>
+          <circle cx="3"  cy="14" r="1.3" fill="rgba(255,255,255,.7)"/>
+        </svg>
+      </div>
+      <span class="nav-brand-text">ESP32 <span>IoT</span> Terminal</span>
+    </div>
+    <div class="nav-right">
+      <button class="btn-back" onclick="goToLogin()">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <path d="M13 8H3M7 4l-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>KEMBALI
+      </button>
+      <div id="badge"><span id="dot"></span><span id="btext">DISCONNECTED</span></div>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- Baris 1: Status & LDR -->
+    <div class="g2">
+      <div class="card">
+        <div class="clabel">Status Sistem</div>
+        <div class="status-wrap">
+          <div class="status-ring" id="sring">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="rgba(45,212,191,0.2)" stroke="#2dd4bf" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div id="sval">STANDBY</div>
+            <div id="snote">Menunggu data dari ESP32...</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="clabel">Cahaya — LDR (GPIO 22)</div>
+        <div class="ldr-row">
+          <div class="ldr-box" id="lbox"><span id="lico">💡</span></div>
+          <div class="ldr-pill" id="lpill">MENUNGGU</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Baris 2: Suhu & Kelembapan -->
+    <div class="g2">
+      <div class="card">
+        <div class="clabel">Suhu — DHT11 (GPIO 23)</div>
+        <div class="sensor-row">
+          <span id="sv" class="snum">--</span>
+          <span class="sunit">°C</span>
+        </div>
+        <div class="sbar"><div id="sb" class="sfill"></div></div>
+        <div class="shint">Range: 0 – 50 °C</div>
+      </div>
+      <div class="card">
+        <div class="clabel">Kelembapan — DHT11 (GPIO 23)</div>
+        <div class="sensor-row">
+          <span id="hv" class="snum hum">--</span>
+          <span class="sunit">%</span>
+        </div>
+        <div class="sbar"><div id="hb" class="sfill hum"></div></div>
+        <div class="shint">Range: 0 – 100%</div>
+      </div>
+    </div>
+
+    <!-- Mode Badge -->
+    <div class="mode-area">
+      <div id="mode-badge">
+        <span id="mode-dot"></span>
+        <span id="mode-text">MODE: —</span>
+      </div>
+      <span id="mode-hint">Menunggu data...</span>
+    </div>
+
+    <!-- LED Indikator + Kontrol Manual -->
+    <div>
+      <div class="led-legend">
+        <div class="legend-item">
+          <span class="legend-dot" style="background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.6)"></span>
+          20–25°C HIJAU
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background:#fbbf24;box-shadow:0 0 6px rgba(251,191,36,.6)"></span>
+          26–30°C KUNING
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background:#f87171;box-shadow:0 0 6px rgba(248,113,113,.6)"></span>
+          ≥31°C MERAH
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.6)"></span>
+          LED 4 INDIKATOR
+        </div>
+      </div>
+
+      <!-- Banner manual control -->
+      <div id="manual-banner" class="manual-banner hidden">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2a5 5 0 015 5v3H7V7a5 5 0 015-5zM5 12h14a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-8a1 1 0 011-1z" fill="rgba(251,191,36,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        </svg>
+        MODE MANUAL AKTIF — Klik tombol relay untuk toggle ON/OFF dari web
+      </div>
+
+      <div class="g4">
+        <!-- LED 1 — GPIO 4 — Hijau -->
+        <div class="card led-card">
+          <div class="lorb off-g" id="l1"></div>
+          <div class="led-info">
+            <div class="lname">LED / Relay 1</div>
+            <div class="lstate" id="ls1">Padam</div>
+            <div class="lbadge" id="lb1">GPIO 4</div>
+          </div>
+          <button class="relay-btn relay-btn-g" id="rb1" onclick="toggleRelay(1)" disabled title="Aktif saat mode MANUAL">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            TOGGLE
+          </button>
+        </div>
+        <!-- LED 2 — GPIO 18 — Kuning -->
+        <div class="card led-card">
+          <div class="lorb off-y" id="l2"></div>
+          <div class="led-info">
+            <div class="lname">LED / Relay 2</div>
+            <div class="lstate" id="ls2">Padam</div>
+            <div class="lbadge" id="lb2">GPIO 18</div>
+          </div>
+          <button class="relay-btn relay-btn-y" id="rb2" onclick="toggleRelay(2)" disabled title="Aktif saat mode MANUAL">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            TOGGLE
+          </button>
+        </div>
+        <!-- LED 3 — GPIO 19 — Merah -->
+        <div class="card led-card">
+          <div class="lorb off-r" id="l3"></div>
+          <div class="led-info">
+            <div class="lname">LED / Relay 3</div>
+            <div class="lstate" id="ls3">Padam</div>
+            <div class="lbadge" id="lb3">GPIO 19</div>
+          </div>
+          <button class="relay-btn relay-btn-r" id="rb3" onclick="toggleRelay(3)" disabled title="Aktif saat mode MANUAL">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            TOGGLE
+          </button>
+        </div>
+        <!-- LED 4 — GPIO 21 — Hijau (Indikator) -->
+        <div class="card led-card">
+          <div class="lorb off-g" id="l4"></div>
+          <div class="led-info">
+            <div class="lname">LED / Relay 4</div>
+            <div class="lstate" id="ls4">Padam</div>
+            <div class="lbadge" id="lb4">GPIO 21</div>
+          </div>
+          <button class="relay-btn relay-btn-g" id="rb4" onclick="toggleRelay(4)" disabled title="Aktif saat mode MANUAL">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            TOGGLE
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistik -->
+    <div class="g3">
+      <div class="card">
+        <div class="clabel">Total Pesan</div>
+        <div class="stval" id="mc">0</div>
+        <div class="stunit">MESSAGES</div>
+      </div>
+      <div class="card">
+        <div class="clabel">Uptime</div>
+        <div class="stval" id="up">00:00</div>
+        <div class="stunit">MM : SS</div>
+      </div>
+      <div class="card">
+        <div class="clabel">Update Terakhir</div>
+        <div class="stval" id="lu" style="font-size:.9rem;padding-top:4px">—</div>
+        <div class="stunit">TIMESTAMP</div>
+      </div>
+    </div>
+
+    <!-- Log MQTT -->
+    <div class="card">
+      <div class="clabel">Log MQTT</div>
+      <div id="log">
+        <div class="le">
+          <span class="lt">--:--:--</span>
+          <span class="lm muted">Tekan Connect untuk mulai menerima data.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabel Riwayat -->
+    <div class="card">
+      <div class="tbl-toolbar">
+        <div class="clabel" style="margin-bottom:0">Riwayat Data Sensor</div>
+        <div class="tbl-actions">
+          <span class="sel-info" id="sel-info"></span>
+          <button class="tbtn tbtn-del" id="del-btn" onclick="deleteSelected()" disabled>Hapus Terpilih</button>
+          <button class="tbtn tbtn-csv" onclick="exportCSV()">Export CSV</button>
+          <button class="tbtn tbtn-clr" onclick="clearAll()">Hapus Semua</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
+              <th>No</th>
+              <th>Waktu</th>
+              <th>Suhu (°C)</th>
+              <th>Hum (%)</th>
+              <th>Cahaya</th>
+              <th>LED</th>
+            </tr>
+          </thead>
+          <tbody id="tbl-body">
+            <tr><td colspan="7" class="no-data">Belum ada data diterima.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tombol Koneksi -->
+    <button id="btn" onclick="toggle()">
+      <span id="btn-text">HUBUNGKAN KE MQTT</span>
+    </button>
+
+  </div>
+</div><!-- /view-dashboard -->
+
+<!-- Library & Script -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
