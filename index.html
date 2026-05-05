@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IoT Terminal — Naila Winanda</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -26,7 +27,12 @@
       </div>
       <div class="nav-logo-text">ESP32 <span>IoT</span> Terminal</div>
     </div>
-    <div class="nav-ready"><span class="dot"></span>SISTEM SIAP</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="theme-toggle" onclick="toggleTheme()" title="Ganti tema">
+        <span id="theme-icon">☀️</span>
+      </button>
+      <div class="nav-ready"><span class="dot"></span>SISTEM SIAP</div>
+    </div>
   </nav>
 
   <div class="login-body">
@@ -45,9 +51,9 @@
         <div class="hero-title">IoT <span>Terminal</span></div>
         <div class="hero-sub">Sensor Monitor · Real-Time MQTT</div>
         <div class="hero-chips">
-          <span class="hero-chip">SUHU</span>
-          <span class="hero-chip">KELEMBAPAN</span>
-          <span class="hero-chip">PENCAHAYAAN</span>
+          <span class="hero-chip">🌡️ SUHU</span>
+          <span class="hero-chip">💧 KELEMBAPAN</span>
+          <span class="hero-chip">💡 PENCAHAYAAN</span>
         </div>
       </div>
 
@@ -87,7 +93,7 @@
 
     </div>
   </div>
-</div><!-- /view-login -->
+</div>
 
 
 <!-- ══════════════════════════════════════════
@@ -108,6 +114,9 @@
       <span class="nav-brand-text">ESP32 <span>IoT</span> Terminal</span>
     </div>
     <div class="nav-right">
+      <button class="theme-toggle" onclick="toggleTheme()" title="Ganti tema">
+        <span id="theme-icon-dash">☀️</span>
+      </button>
       <button class="btn-back" onclick="goToLogin()">
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
           <path d="M13 8H3M7 4l-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -139,30 +148,57 @@
         <div class="clabel">Cahaya — LDR (GPIO 22)</div>
         <div class="ldr-row">
           <div class="ldr-box" id="lbox"><span id="lico">💡</span></div>
-          <div class="ldr-pill" id="lpill">MENUNGGU</div>
+          <div>
+            <div class="ldr-pill" id="lpill">MENUNGGU</div>
+            <div class="ldr-hint">Sensor digital DO</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Baris 2: Suhu & Kelembapan -->
+    <!-- Baris 2: Sensor Value Cards -->
     <div class="g2">
-      <div class="card">
+      <div class="card sensor-card">
         <div class="clabel">Suhu — DHT11 (GPIO 23)</div>
         <div class="sensor-row">
           <span id="sv" class="snum">--</span>
           <span class="sunit">°C</span>
+          <span class="sensor-trend" id="temp-trend"></span>
         </div>
         <div class="sbar"><div id="sb" class="sfill"></div></div>
-        <div class="shint">Range: 0 – 50 °C</div>
+        <div class="shint">Range: 0 – 50 °C &nbsp;|&nbsp; <span id="temp-status">—</span></div>
       </div>
-      <div class="card">
+      <div class="card sensor-card">
         <div class="clabel">Kelembapan — DHT11 (GPIO 23)</div>
         <div class="sensor-row">
           <span id="hv" class="snum hum">--</span>
           <span class="sunit">%</span>
+          <span class="sensor-trend" id="hum-trend"></span>
         </div>
         <div class="sbar"><div id="hb" class="sfill hum"></div></div>
-        <div class="shint">Range: 0 – 100%</div>
+        <div class="shint">Range: 0 – 100% &nbsp;|&nbsp; <span id="hum-status">—</span></div>
+      </div>
+    </div>
+
+    <!-- Grafik Realtime — 2 terpisah -->
+    <div class="g2">
+      <div class="card chart-card">
+        <div class="chart-header">
+          <div class="clabel" style="margin-bottom:0">🌡️ Grafik Suhu</div>
+          <span class="cleg-unit">°C</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartTemp"></canvas>
+        </div>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-header">
+          <div class="clabel" style="margin-bottom:0">💧 Grafik Kelembapan</div>
+          <span class="cleg-unit sky">%</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartHum"></canvas>
+        </div>
       </div>
     </div>
 
@@ -188,7 +224,7 @@
         </div>
         <div class="legend-item">
           <span class="legend-dot" style="background:#f87171;box-shadow:0 0 6px rgba(248,113,113,.6)"></span>
-          ≥30°C MERAH
+          ≥31°C MERAH
         </div>
         <div class="legend-item">
           <span class="legend-dot" style="background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.6)"></span>
@@ -272,33 +308,17 @@
       </div>
     </div>
 
-    <!-- Statistik -->
-    <div class="g3">
+    <!-- Statistik (tanpa Total Pesan) -->
+    <div class="g2">
       <div class="card">
-        <div class="clabel">Total Pesan</div>
-        <div class="stval" id="mc">0</div>
-        <div class="stunit">MESSAGES</div>
-      </div>
-      <div class="card">
-        <div class="clabel">Uptime</div>
+        <div class="clabel">Uptime Koneksi</div>
         <div class="stval" id="up">00:00</div>
         <div class="stunit">MM : SS</div>
       </div>
       <div class="card">
         <div class="clabel">Update Terakhir</div>
-        <div class="stval" id="lu" style="font-size:.9rem;padding-top:4px">—</div>
+        <div class="stval" id="lu" style="font-size:.95rem;padding-top:6px">—</div>
         <div class="stunit">TIMESTAMP</div>
-      </div>
-    </div>
-
-    <!-- Log MQTT -->
-    <div class="card">
-      <div class="clabel">Log MQTT</div>
-      <div id="log">
-        <div class="le">
-          <span class="lt">--:--:--</span>
-          <span class="lm muted">Tekan Connect untuk mulai menerima data.</span>
-        </div>
       </div>
     </div>
 
@@ -339,11 +359,9 @@
     </button>
 
   </div>
-</div><!-- /view-dashboard -->
+</div>
 
-<!-- Library & Script -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
 <script src="script.js"></script>
-
 </body>
 </html>
