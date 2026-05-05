@@ -1,6 +1,6 @@
 /* ============================================================
    IoT Terminal — Naila Winanda Nurpratama
-   MQTT Dashboard Script
+   MQTT Dashboard Script — Revisi: Grafik Realtime, Dark/Light Mode
    ============================================================ */
 
 /* ── KONFIGURASI MQTT ── */
@@ -8,44 +8,193 @@ const BROKER    = 'b338e112c7b54236bc6ebddb85504b3b.s1.eu.hivemq.cloud';
 const PORT      = 8884;
 const USERNAME  = 'nailawinanda';
 const PASSWORD  = 'Naila_ukk1';
-const TOPIC_SUB = 'smk/iot/sensor';        // Subscribe — data dari ESP32
-const TOPIC_CMD = 'smk/iot/relay/cmd';     // Publish  — perintah relay ke ESP32
-const TBL_INT   = 2000;   // interval update tabel (ms)
-const MAX_ROWS  = 50;     // baris maksimum riwayat
-
-/*
-  PIN MAP (sesuai Arduino):
-  LED/Relay 1 → GPIO 4   (Hijau,  20–25°C)
-  LED/Relay 2 → GPIO 18  (Kuning, 26–30°C)
-  LED/Relay 3 → GPIO 19  (Merah,  ≥31°C)
-  LED/Relay 4 → GPIO 21  (Hijau,  Indikator / selalu ON di auto)
-*/
+const TOPIC_SUB = 'smk/iot/sensor';
+const TOPIC_CMD = 'smk/iot/relay/cmd';
+const TBL_INT   = 2000;
+const MAX_ROWS  = 50;
+const MAX_CHART_POINTS = 30;
 
 /* ── STATE ── */
 let cl          = null;
 let conn        = false;
 let lastStatus  = '';
 let manualDisc  = false;
-let mc          = 0;   // ← selalu sinkron dengan history.length
 let st          = null;
 let uptimer     = null;
 let history     = [];
-let nextId      = 1;
 let lastData    = null;
 let lastTblTime = 0;
+let lastTemp    = null;
+let lastHum     = null;
 
-// State relay lokal (index 0–3 = relay 1–4)
 let relayState  = [false, false, false, false];
-let currentMode = '';  // 'auto' | 'manual' | ''
+let currentMode = '';
+
+/* ── CHART DATA ── */
+const chartLabels   = [];
+const chartTempData = [];
+const chartHumData  = [];
+let chartTemp       = null;
+let chartHum        = null;
 
 /* ── HELPER ── */
 const g = id => document.getElementById(id);
 
-/* ── UPDATE TOTAL PESAN — selalu = jumlah baris history ── */
-function updateMsgCount() {
-  mc = history.length;
-  localStorage.setItem('msg_count', mc);
-  g('mc').textContent = mc;
+/* ── HELPER: Dapatkan label status suhu ── */
+function getTempStatus(suhu) {
+  if (suhu <= 25) return { label: 'Sejuk 🟢',  key: 'SEJUK'  };
+  if (suhu <= 30) return { label: 'Hangat 🟡', key: 'HANGAT' };
+  return                { label: 'Panas 🔴',   key: 'PANAS'  };
+}
+
+/* ============================================================
+   DARK / LIGHT THEME
+   ============================================================ */
+function toggleTheme() {
+  const html = document.documentElement;
+  const cur  = html.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('iot_theme', next);
+  updateThemeIcons(next);
+  updateChartTheme();
+}
+
+function updateThemeIcons(theme) {
+  const icon = theme === 'dark' ? '☀️' : '🌙';
+  const i1 = g('theme-icon');
+  const i2 = g('theme-icon-dash');
+  if (i1) i1.textContent = icon;
+  if (i2) i2.textContent = icon;
+}
+
+function loadTheme() {
+  const saved = localStorage.getItem('iot_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeIcons(saved);
+}
+
+function getCSSVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/* ============================================================
+   CHART — dua grafik terpisah
+   ============================================================ */
+function makeChartOptions(color, unit, isDark) {
+  const grid   = isDark ? 'rgba(120,140,200,0.08)' : 'rgba(80,100,160,0.08)';
+  const border = isDark ? 'rgba(120,140,200,0.15)'  : 'rgba(80,100,160,0.15)';
+  const tick   = isDark ? '#6577a0' : '#475569';
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 500 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: isDark ? 'rgba(22,28,38,0.95)' : 'rgba(255,255,255,0.97)',
+        titleColor: isDark ? '#e2e8f0' : '#0f172a',
+        bodyColor:  isDark ? '#94a3b8' : '#475569',
+        borderColor: isDark ? 'rgba(120,140,200,0.25)' : 'rgba(80,100,160,0.18)',
+        borderWidth: 1, padding: 10, cornerRadius: 10,
+        callbacks: { label: ctx => ` ${ctx.parsed.y} ${unit}` }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: grid },
+        ticks: { color: tick, font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 0, maxTicksLimit: 7 },
+        border: { color: border }
+      },
+      y: {
+        grid: { color: grid },
+        ticks: { color, font: { family: 'JetBrains Mono', size: 10 }, callback: v => v + unit },
+        border: { color: border }
+      }
+    }
+  };
+}
+
+function initChart() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+  const ctxT = g('chartTemp');
+  const ctxH = g('chartHum');
+  if (!ctxT || !ctxH) return;
+
+  chartTemp = new Chart(ctxT, {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'Suhu',
+        data: chartTempData,
+        borderColor: '#2dd4bf',
+        backgroundColor: 'rgba(45,212,191,0.10)',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointBackgroundColor: '#2dd4bf',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1.5,
+        tension: 0.45,
+        fill: true,
+      }]
+    },
+    options: makeChartOptions('#2dd4bf', '°C', isDark)
+  });
+
+  chartHum = new Chart(ctxH, {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'Kelembapan',
+        data: chartHumData,
+        borderColor: '#38bdf8',
+        backgroundColor: 'rgba(56,189,248,0.10)',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointBackgroundColor: '#38bdf8',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1.5,
+        tension: 0.45,
+        fill: true,
+      }]
+    },
+    options: makeChartOptions('#38bdf8', '%', isDark)
+  });
+}
+
+function updateChartTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (chartTemp) {
+    const opt = makeChartOptions('#2dd4bf', '°C', isDark);
+    chartTemp.options = opt;
+    chartTemp.update('none');
+  }
+  if (chartHum) {
+    const opt = makeChartOptions('#38bdf8', '%', isDark);
+    chartHum.options = opt;
+    chartHum.update('none');
+  }
+}
+
+function addChartPoint(timeStr, suhu, hum) {
+  if (suhu == null || hum == null) return;
+
+  chartLabels.push(timeStr);
+  chartTempData.push(parseFloat(suhu.toFixed(1)));
+  chartHumData.push(parseFloat(hum.toFixed(1)));
+
+  if (chartLabels.length > MAX_CHART_POINTS) {
+    chartLabels.shift();
+    chartTempData.shift();
+    chartHumData.shift();
+  }
+
+  if (chartTemp) chartTemp.update();
+  if (chartHum)  chartHum.update();
 }
 
 /* ============================================================
@@ -61,6 +210,7 @@ function goToDashboard() {
     dash.classList.remove('hidden');
     dash.classList.add('fade-in');
     window.scrollTo(0, 0);
+    if (!chartTemp) initChart();
   }, 320);
 }
 
@@ -78,17 +228,17 @@ function goToLogin() {
    ============================================================ */
 function saveHistory() {
   try {
-    localStorage.setItem('iot_hist', JSON.stringify({ rows: history, nextId }));
+    localStorage.setItem('iot_hist', JSON.stringify({ rows: history }));
   } catch(e) {}
 }
 
 function loadHistory() {
+  loadTheme();
   try {
     const raw = localStorage.getItem('iot_hist');
     if (!raw) return;
     const obj = JSON.parse(raw);
     history = obj.rows || [];
-    nextId  = obj.nextId || history.length + 1;
     rebuildTable();
     const lu = localStorage.getItem('last_update');
     if (lu) g('lu').textContent = lu;
@@ -96,12 +246,10 @@ function loadHistory() {
     const last = localStorage.getItem('last_sensor');
     if (last) {
       const d = JSON.parse(last);
-      if (d.suhu)   updSensor(d.suhu, d.hum);
+      if (d.suhu != null)   updSensor(d.suhu, d.hum);
       if (d.cahaya) updLDR(d.cahaya);
     }
   } catch(e) {}
-  // ← Sinkronkan mc dengan jumlah baris yang ada di history
-  updateMsgCount();
 }
 
 /* ============================================================
@@ -112,25 +260,24 @@ function rebuildTable() {
   tb.innerHTML = history.length
     ? ''
     : '<tr><td colspan="7" class="no-data">Belum ada data diterima.</td></tr>';
-  history.forEach(r => tb.appendChild(makeRow(r)));
+  // Tampilkan terbaru di atas, nomor urut dari 1
+  [...history].reverse().forEach((r, i) => tb.appendChild(makeRow(r, i + 1)));
   g('chk-all').checked = false;
   g('del-btn').disabled = true;
-  // Sinkronkan mc setiap kali tabel dibangun ulang
-  updateMsgCount();
 }
 
-function makeRow(r) {
+function makeRow(r, num) {
   const tr = document.createElement('tr');
   tr.dataset.id = r.id;
   tr.innerHTML = `
     <td><input type="checkbox" class="row-cb" data-id="${r.id}" onchange="onRowCheck()"></td>
-    <td>${r.id}</td>
+    <td>${num != null ? num : r.num}</td>
     <td>${r.ts}</td>
     <td class="suhu-cell">${r.suhu}</td>
     <td class="hum-cell">${r.hum}</td>
     <td>${r.cahaya === 'TERANG'
-      ? '<span class="bt">TERANG</span>'
-      : '<span class="bg">GELAP</span>'}</td>
+      ? '<span class="bt">☀️ TERANG</span>'
+      : '<span class="bg">🌙 GELAP</span>'}</td>
     <td>${r.led}</td>`;
   tr.onclick = e => {
     if (e.target.type === 'checkbox') return;
@@ -144,17 +291,14 @@ function makeRow(r) {
 function addTableRow(now, suhu, hum, cahaya, activeRelays) {
   const names = ['LED1','LED2','LED3','LED4'];
   let aktif = [];
-
   if (Array.isArray(activeRelays)) {
-    activeRelays.forEach(n => {
-      if (n >= 1 && n <= 4) aktif.push(names[n - 1]);
-    });
+    activeRelays.forEach(n => { if (n >= 1 && n <= 4) aktif.push(names[n - 1]); });
   } else if (typeof activeRelays === 'string' && /^[01]{4}$/.test(activeRelays)) {
     activeRelays.split('').forEach((v, i) => { if (v === '1') aktif.push(names[i]); });
   }
 
   const row = {
-    id:     nextId++,
+    id:     now.getTime(),   // unique key untuk checkbox, tidak ditampilkan
     ts:     now.toLocaleTimeString('id-ID', { hour12: false }),
     suhu:   suhu != null ? suhu.toFixed(1) : '-',
     hum:    hum  != null ? hum.toFixed(1)  : '-',
@@ -163,20 +307,27 @@ function addTableRow(now, suhu, hum, cahaya, activeRelays) {
   };
 
   history.push(row);
-  if (history.length > MAX_ROWS) history.shift();
+  if (history.length > MAX_ROWS) history.shift(); // buang data terlama
 
   const tb    = g('tbl-body');
   const noRow = tb.querySelector('.no-data');
   if (noRow) noRow.parentElement.remove();
 
-  tb.appendChild(makeRow(row));
+  // Nomor urut = history.length (ini data terbaru = no 1 di tampilan)
+  // Sisipkan di ATAS tabel
+  tb.insertBefore(makeRow(row, 1), tb.firstChild);
 
-  while (tb.children.length > MAX_ROWS) tb.removeChild(tb.firstChild);
+  // Perbarui nomor urut semua baris yang sudah ada (geser +1)
+  [...tb.querySelectorAll('tr[data-id]')].forEach((tr, i) => {
+    const numCell = tr.querySelector('td:nth-child(2)');
+    if (numCell) numCell.textContent = i + 1;
+  });
+
+  // Buang baris terbawah jika melebihi MAX_ROWS
+  while (tb.children.length > MAX_ROWS) tb.removeChild(tb.lastChild);
 
   updateSelInfo();
   saveHistory();
-  // ← Sinkronkan mc setelah baris baru ditambahkan
-  updateMsgCount();
 }
 
 function onRowCheck() {
@@ -206,9 +357,8 @@ function deleteSelected() {
   const ids = new Set([...document.querySelectorAll('.row-cb:checked')].map(c => +c.dataset.id));
   if (!ids.size) return;
   history = history.filter(r => !ids.has(r.id));
-  // ← mc tidak dihitung manual lagi, cukup panggil updateMsgCount via rebuildTable
   saveHistory();
-  rebuildTable();   // sudah memanggil updateMsgCount() di dalamnya
+  rebuildTable();
   updateSelInfo();
   g('chk-all').checked  = false;
   g('del-btn').disabled = true;
@@ -217,9 +367,8 @@ function deleteSelected() {
 function clearAll() {
   if (!history.length || !confirm('Hapus semua riwayat data?')) return;
   history = [];
-  nextId  = 1;
   saveHistory();
-  rebuildTable();   // sudah memanggil updateMsgCount() di dalamnya
+  rebuildTable();
   updateSelInfo();
 }
 
@@ -236,18 +385,11 @@ function exportCSV() {
 }
 
 /* ============================================================
-   RELAY CONTROL — Publish ke ESP32 via MQTT
-   Format: {"relay":1,"state":true}   (relay 1-indexed)
+   RELAY CONTROL
    ============================================================ */
 function toggleRelay(relayNum) {
-  if (currentMode !== 'manual') {
-    showAlert('⚠ Hanya aktif di mode MANUAL', 'yellow');
-    return;
-  }
-  if (!conn) {
-    showAlert('⚠ Belum terhubung ke MQTT', 'yellow');
-    return;
-  }
+  if (currentMode !== 'manual') { showAlert('⚠ Hanya aktif di mode MANUAL', 'yellow'); return; }
+  if (!conn) { showAlert('⚠ Belum terhubung ke MQTT', 'yellow'); return; }
 
   const idx      = relayNum - 1;
   const newState = !relayState[idx];
@@ -257,12 +399,10 @@ function toggleRelay(relayNum) {
     const msg = new Paho.Message(payload);
     msg.destinationName = TOPIC_CMD;
     cl.send(msg);
-    addLog('CMD', `→ Relay ${relayNum} : ${newState ? 'ON' : 'OFF'}`);
-
     relayState[idx] = newState;
     applyRelayUI(idx, newState);
   } catch(e) {
-    addLog('ERR', 'Gagal kirim perintah: ' + e.message);
+    showAlert('❌ Gagal kirim: ' + e.message, 'red');
   }
 }
 
@@ -340,16 +480,14 @@ function onConn() {
   g('btn').classList.add('disc');
   g('btn-text').textContent = 'PUTUSKAN KONEKSI';
   cl.subscribe(TOPIC_SUB);
-  addLog('SYS', 'Connected: ' + BROKER);
-  addLog('SYS', 'Subscribe: ' + TOPIC_SUB);
-  addLog('SYS', 'Publish CMD: ' + TOPIC_CMD);
   st      = Date.now();
   uptimer = setInterval(uptime, 1000);
+  showAlert('✅ Terhubung ke MQTT Broker', 'green');
 }
 
 function onFail(e) {
   setBadge('error', 'GAGAL');
-  addLog('SYS', 'Error: ' + e.errorMessage);
+  showAlert('❌ Gagal: ' + e.errorMessage, 'red');
   g('btn').disabled = false;
 }
 
@@ -367,7 +505,6 @@ function onLost() {
 }
 
 function onMsg(m) {
-  // ← mc TIDAK dinaikkan di sini; akan otomatis update setelah addTableRow
   const now     = new Date();
   const timeStr = now.toLocaleTimeString('id-ID', { hour12: false });
   g('lu').textContent = timeStr;
@@ -384,32 +521,25 @@ function onMsg(m) {
     localStorage.setItem('last_sensor', JSON.stringify(lastData));
 
     updModeBadge(mode, suhu);
-    if (suhu != null && hum != null) updSensor(suhu, hum);
+    if (suhu != null && hum != null) {
+      updSensor(suhu, hum);
+      addChartPoint(timeStr, suhu, hum);
+    }
     if (cahaya) updLDR(cahaya);
 
     if (mode !== currentMode) {
       currentMode = mode;
       setRelayButtons(mode === 'manual' && conn);
-      if (mode === 'manual') {
-        addLog('SYS', 'Mode MANUAL → tombol relay web aktif');
-      } else {
-        addLog('SYS', 'Mode AUTO → tombol relay web nonaktif');
-      }
     }
 
     if (mode === 'manual') {
       const ledFromESP = parseLed(d.led);
-      addLog('MODE', 'MANUAL');
-      addLog('LED',  `L1:${+ledFromESP[0]} L2:${+ledFromESP[1]} L3:${+ledFromESP[2]} L4:${+ledFromESP[3]}`);
       relayState = [...ledFromESP];
       updLEDs(ledFromESP, 'manual');
       setSystemState('manual');
 
     } else {
-      if (suhu == null || hum == null) { addLog('ERR', 'Data tidak lengkap'); return; }
-      addLog('SUHU', suhu.toFixed(1) + ' °C');
-      addLog('HUM',  hum.toFixed(1)  + ' %');
-      addLog('LDR',  cahaya || '—');
+      if (suhu == null || hum == null) return;
       setSystemState('auto', suhu);
       updLEDs(null, 'auto', suhu);
       relayState = [
@@ -421,7 +551,7 @@ function onMsg(m) {
       cekAlert(suhu);
     }
 
-    // Tambah ke tabel — updateMsgCount() dipanggil otomatis di addTableRow
+    // Update tabel
     if (Date.now() - lastTblTime >= TBL_INT) {
       lastTblTime = Date.now();
       const activeRelays = relayState
@@ -431,7 +561,7 @@ function onMsg(m) {
     }
 
   } catch(e) {
-    addLog('ERR', 'JSON Error: ' + e.message);
+    showAlert('❌ JSON Error: ' + e.message, 'red');
   }
 }
 
@@ -451,10 +581,51 @@ function parseLed(led) {
 }
 
 function updSensor(suhu, hum) {
-  g('sv').textContent   = suhu.toFixed(1);
-  g('hv').textContent   = hum.toFixed(1);
-  g('sb').style.width   = Math.min(100, (suhu / 50) * 100) + '%';
-  g('hb').style.width   = Math.min(100, hum) + '%';
+  // ── Trend suhu ──
+  if (lastTemp !== null) {
+    const diff  = suhu - lastTemp;
+    const trend = g('temp-trend');
+    if (Math.abs(diff) < 0.1) {
+      trend.textContent = '→ Stabil';
+      trend.className   = 'sensor-trend same';
+    } else if (diff > 0) {
+      trend.textContent = '↑ +' + diff.toFixed(1);
+      trend.className   = 'sensor-trend up';
+    } else {
+      trend.textContent = '↓ ' + diff.toFixed(1);
+      trend.className   = 'sensor-trend down';
+    }
+  }
+
+  // ── Trend kelembapan ──
+  if (lastHum !== null) {
+    const diff  = hum - lastHum;
+    const trend = g('hum-trend');
+    if (Math.abs(diff) < 0.5) {
+      trend.textContent = '→ Stabil';
+      trend.className   = 'sensor-trend same';
+    } else if (diff > 0) {
+      trend.textContent = '↑ +' + diff.toFixed(1);
+      trend.className   = 'sensor-trend up';
+    } else {
+      trend.textContent = '↓ ' + diff.toFixed(1);
+      trend.className   = 'sensor-trend down';
+    }
+  }
+
+  lastTemp = suhu;
+  lastHum  = hum;
+
+  g('sv').textContent = suhu.toFixed(1);
+  g('hv').textContent = hum.toFixed(1);
+  g('sb').style.width = Math.min(100, (suhu / 50) * 100) + '%';
+  g('hb').style.width = Math.min(100, hum) + '%';
+
+  // ── Status suhu: Sejuk / Hangat / Panas ──
+  const { label: tempStatusLabel } = getTempStatus(suhu);
+  const humStatus = hum < 30 ? 'Kering 🟡' : hum <= 70 ? 'Normal 🟢' : 'Lembap 🔵';
+  g('temp-status').textContent = tempStatusLabel;
+  g('hum-status').textContent  = humStatus;
 }
 
 function updLDR(v) {
@@ -472,18 +643,18 @@ function updModeBadge(mode, suhu) {
   g('mode-text').textContent = mode === 'manual' ? 'MODE: MANUAL' : 'MODE: AUTO';
   g('mode-hint').textContent = mode === 'manual'
     ? 'LED dikontrol via tombol fisik / web'
-    : (suhu != null ? 'LED dari suhu ' + suhu.toFixed(1) + '°C' : 'LED dari suhu sensor');
+    : (suhu != null ? 'LED otomatis dari suhu ' + suhu.toFixed(1) + '°C' : 'LED dari suhu sensor');
 }
 
 function setSystemState(state, suhu) {
   const sv   = g('sval');
   const ring = g('sring');
   if (state === 'auto') {
-    sv.textContent      = 'AKTIF';
-    sv.className        = 'on';
-    ring.className      = 'status-ring on';
-    const s = suhu <= 25 ? 'NORMAL' : suhu <= 30 ? 'SEDANG' : 'PANAS';
-    g('snote').textContent = 'STATUS: ' + s + ' | ' + suhu.toFixed(1) + '°C';
+    sv.textContent = 'AKTIF';
+    sv.className   = 'on';
+    ring.className = 'status-ring on';
+    const { key } = getTempStatus(suhu);
+    g('snote').textContent = 'STATUS: ' + key + ' | ' + suhu.toFixed(1) + '°C';
   } else if (state === 'manual') {
     sv.textContent         = 'MANUAL';
     sv.className           = 'on';
@@ -558,42 +729,88 @@ function updLEDs(state, mode, suhu) {
 }
 
 /* ============================================================
-   ALERT & LOG
+   ALERT — CEK SUHU & PERINGATAN PANAS
    ============================================================ */
-function cekAlert(suhu) {
-  const s = suhu <= 25 ? 'NORMAL' : suhu <= 30 ? 'SEDANG' : 'PANAS';
-  if (s !== lastStatus) {
-    const map = {
-      NORMAL: ['● Suhu Normal (20–25°C)', 'green'],
-      SEDANG: ['● Suhu Sedang (26–30°C)', 'yellow'],
-      PANAS:  ['● Suhu Panas (≥30°C)',    'red']
-    };
-    showAlert(...map[s]);
+
+/* Banner peringatan panas yang persisten di dalam dashboard */
+let hotBannerShown = false;
+
+function showHotWarning(suhu) {
+  // Tampilkan banner peringatan di halaman jika belum ada
+  if (!hotBannerShown) {
+    hotBannerShown = true;
+    const container = document.querySelector('.container');
+    if (!container) return;
+
+    // Hapus banner lama jika ada
+    const old = document.getElementById('hot-warning-banner');
+    if (old) old.remove();
+
+    const banner = document.createElement('div');
+    banner.id        = 'hot-warning-banner';
+    banner.className = 'hot-warning-banner';
+    banner.innerHTML = `
+      <div class="hot-warning-icon">🔥</div>
+      <div class="hot-warning-content">
+        <div class="hot-warning-title">PERINGATAN: SUHU TERLALU PANAS!</div>
+        <div class="hot-warning-sub">Suhu saat ini <strong>${suhu.toFixed(1)}°C</strong> — melebihi batas aman (≥31°C). Segera ambil tindakan pendinginan!</div>
+      </div>
+      <button class="hot-warning-close" onclick="dismissHotWarning()">✕</button>
+    `;
+
+    // Sisipkan di awal container (setelah elemen pertama / g2 pertama)
+    container.insertBefore(banner, container.firstChild);
+  } else {
+    // Perbarui nilai suhu di banner yang sudah ada
+    const sub = document.querySelector('#hot-warning-banner .hot-warning-sub');
+    if (sub) sub.innerHTML = `Suhu saat ini <strong>${suhu.toFixed(1)}°C</strong> — melebihi batas aman (≥31°C). Segera ambil tindakan pendinginan!`;
   }
-  lastStatus = s;
+}
+
+function dismissHotWarning() {
+  const banner = document.getElementById('hot-warning-banner');
+  if (banner) {
+    banner.style.animation = 'bannerOut .3s ease forwards';
+    setTimeout(() => { banner.remove(); hotBannerShown = false; }, 300);
+  }
+}
+
+function hideHotWarning() {
+  const banner = document.getElementById('hot-warning-banner');
+  if (banner) {
+    banner.remove();
+    hotBannerShown = false;
+  }
+}
+
+function cekAlert(suhu) {
+  const { key } = getTempStatus(suhu);
+
+  if (key !== lastStatus) {
+    const map = {
+      SEJUK:  ['🟢 Suhu Sejuk (20–25°C)',  'green'],
+      HANGAT: ['🟡 Suhu Hangat (26–30°C)', 'yellow'],
+      PANAS:  ['🔴 Suhu Panas (≥31°C) — BAHAYA!', 'red']
+    };
+    if (map[key]) showAlert(...map[key]);
+
+    // Tampilkan / sembunyikan banner peringatan panas
+    if (key === 'PANAS') {
+      showHotWarning(suhu);
+    } else {
+      hideHotWarning();
+    }
+  } else if (key === 'PANAS') {
+    // Perbarui nilai suhu di banner meski status tidak berubah
+    showHotWarning(suhu);
+  }
+
+  lastStatus = key;
 }
 
 function setBadge(cls, txt) {
   g('badge').className   = 'badge ' + cls;
   g('btext').textContent = txt;
-}
-
-function addLog(type, msg) {
-  const el  = g('log');
-  const t   = new Date().toLocaleTimeString('id-ID', { hour12: false });
-  const d   = document.createElement('div');
-  d.className = 'le';
-  const cls = type === 'CMD'
-    ? 'cmd-txt'
-    : (msg.includes('TERANG') || msg.includes('AKTIF'))
-      ? 'on-txt'
-      : (msg.includes('GELAP') || msg.includes('STANDBY'))
-        ? 'muted'
-        : '';
-  d.innerHTML = `<span class="lt">${t}</span> <span class="lk">[${type}]</span> <span class="lm ${cls}">${msg}</span>`;
-  el.appendChild(d);
-  el.scrollTop = el.scrollHeight;
-  while (el.children.length > 120) el.removeChild(el.firstChild);
 }
 
 function uptime() {
@@ -607,7 +824,7 @@ function showAlert(text, type) {
   div.className  = 'alert-box alert-' + type;
   div.innerText  = text;
   document.body.appendChild(div);
-  setTimeout(() => div.remove(), 3200);
+  setTimeout(() => div.remove(), 3500);
 }
 
 /* ── INIT ── */
