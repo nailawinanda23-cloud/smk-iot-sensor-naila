@@ -26,7 +26,7 @@ let cl          = null;
 let conn        = false;
 let lastStatus  = '';
 let manualDisc  = false;
-let mc          = parseInt(localStorage.getItem('msg_count')) || 0;
+let mc          = 0;   // ← selalu sinkron dengan history.length
 let st          = null;
 let uptimer     = null;
 let history     = [];
@@ -40,6 +40,13 @@ let currentMode = '';  // 'auto' | 'manual' | ''
 
 /* ── HELPER ── */
 const g = id => document.getElementById(id);
+
+/* ── UPDATE TOTAL PESAN — selalu = jumlah baris history ── */
+function updateMsgCount() {
+  mc = history.length;
+  localStorage.setItem('msg_count', mc);
+  g('mc').textContent = mc;
+}
 
 /* ============================================================
    NAVIGASI
@@ -93,7 +100,8 @@ function loadHistory() {
       if (d.cahaya) updLDR(d.cahaya);
     }
   } catch(e) {}
-  g('mc').textContent = mc;
+  // ← Sinkronkan mc dengan jumlah baris yang ada di history
+  updateMsgCount();
 }
 
 /* ============================================================
@@ -107,6 +115,8 @@ function rebuildTable() {
   history.forEach(r => tb.appendChild(makeRow(r)));
   g('chk-all').checked = false;
   g('del-btn').disabled = true;
+  // Sinkronkan mc setiap kali tabel dibangun ulang
+  updateMsgCount();
 }
 
 function makeRow(r) {
@@ -132,17 +142,14 @@ function makeRow(r) {
 }
 
 function addTableRow(now, suhu, hum, cahaya, activeRelays) {
-  // activeRelays = array angka relay yang ON, misal [2, 4] artinya LED2 dan LED4
   const names = ['LED1','LED2','LED3','LED4'];
   let aktif = [];
 
   if (Array.isArray(activeRelays)) {
-    // Format array index 1-based: [1, 3] → LED1, LED3
     activeRelays.forEach(n => {
       if (n >= 1 && n <= 4) aktif.push(names[n - 1]);
     });
   } else if (typeof activeRelays === 'string' && /^[01]{4}$/.test(activeRelays)) {
-    // Format string biner "1010" → LED1, LED3
     activeRelays.split('').forEach((v, i) => { if (v === '1') aktif.push(names[i]); });
   }
 
@@ -168,6 +175,8 @@ function addTableRow(now, suhu, hum, cahaya, activeRelays) {
 
   updateSelInfo();
   saveHistory();
+  // ← Sinkronkan mc setelah baris baru ditambahkan
+  updateMsgCount();
 }
 
 function onRowCheck() {
@@ -197,11 +206,9 @@ function deleteSelected() {
   const ids = new Set([...document.querySelectorAll('.row-cb:checked')].map(c => +c.dataset.id));
   if (!ids.size) return;
   history = history.filter(r => !ids.has(r.id));
-  mc      = Math.max(0, mc - ids.size);
-  localStorage.setItem('msg_count', mc);
-  g('mc').textContent = mc;
+  // ← mc tidak dihitung manual lagi, cukup panggil updateMsgCount via rebuildTable
   saveHistory();
-  rebuildTable();
+  rebuildTable();   // sudah memanggil updateMsgCount() di dalamnya
   updateSelInfo();
   g('chk-all').checked  = false;
   g('del-btn').disabled = true;
@@ -212,7 +219,7 @@ function clearAll() {
   history = [];
   nextId  = 1;
   saveHistory();
-  rebuildTable();
+  rebuildTable();   // sudah memanggil updateMsgCount() di dalamnya
   updateSelInfo();
 }
 
@@ -252,7 +259,6 @@ function toggleRelay(relayNum) {
     cl.send(msg);
     addLog('CMD', `→ Relay ${relayNum} : ${newState ? 'ON' : 'OFF'}`);
 
-    // Update state lokal langsung (feedback cepat di UI)
     relayState[idx] = newState;
     applyRelayUI(idx, newState);
   } catch(e) {
@@ -260,7 +266,6 @@ function toggleRelay(relayNum) {
   }
 }
 
-/* Update satu relay di UI */
 function applyRelayUI(idx, on) {
   const n = idx + 1;
   const colorClass   = ['green', 'yellow', 'red', 'green'];
@@ -284,7 +289,6 @@ function applyRelayUI(idx, on) {
   }
 }
 
-/* Aktifkan / nonaktifkan tombol relay sesuai mode */
 function setRelayButtons(enabled) {
   [1, 2, 3, 4].forEach(n => {
     const btn = g('rb' + n);
@@ -363,9 +367,7 @@ function onLost() {
 }
 
 function onMsg(m) {
-  mc++;
-  localStorage.setItem('msg_count', mc);
-  g('mc').textContent = mc;
+  // ← mc TIDAK dinaikkan di sini; akan otomatis update setelah addTableRow
   const now     = new Date();
   const timeStr = now.toLocaleTimeString('id-ID', { hour12: false });
   g('lu').textContent = timeStr;
@@ -385,7 +387,6 @@ function onMsg(m) {
     if (suhu != null && hum != null) updSensor(suhu, hum);
     if (cahaya) updLDR(cahaya);
 
-    // Deteksi perubahan mode — enable/disable tombol relay
     if (mode !== currentMode) {
       currentMode = mode;
       setRelayButtons(mode === 'manual' && conn);
@@ -397,39 +398,32 @@ function onMsg(m) {
     }
 
     if (mode === 'manual') {
-      // ── MODE MANUAL ──────────────────────────────────────────
-      // Sinkronisasi state relay lokal dari data ESP32
-      // (hanya update dari ESP32 jika tidak ada aksi web baru)
       const ledFromESP = parseLed(d.led);
       addLog('MODE', 'MANUAL');
       addLog('LED',  `L1:${+ledFromESP[0]} L2:${+ledFromESP[1]} L3:${+ledFromESP[2]} L4:${+ledFromESP[3]}`);
-      // Sinkronisasi relayState dari ESP32 (sumber kebenaran)
       relayState = [...ledFromESP];
       updLEDs(ledFromESP, 'manual');
       setSystemState('manual');
 
     } else {
-      // ── MODE AUTO ────────────────────────────────────────────
       if (suhu == null || hum == null) { addLog('ERR', 'Data tidak lengkap'); return; }
       addLog('SUHU', suhu.toFixed(1) + ' °C');
       addLog('HUM',  hum.toFixed(1)  + ' %');
       addLog('LDR',  cahaya || '—');
       setSystemState('auto', suhu);
       updLEDs(null, 'auto', suhu);
-      // Update state relay lokal sesuai logika auto
       relayState = [
         suhu >= 20 && suhu <= 25,
         suhu >  25 && suhu <= 30,
         suhu >  30,
-        true   // relay 4 selalu ON di auto
+        true
       ];
       cekAlert(suhu);
     }
 
-    // ── Tambah ke tabel menggunakan relayState yang sudah sinkron ──
+    // Tambah ke tabel — updateMsgCount() dipanggil otomatis di addTableRow
     if (Date.now() - lastTblTime >= TBL_INT) {
       lastTblTime = Date.now();
-      // Konversi relayState [true,false,true,true] → [1,3,4] (1-indexed)
       const activeRelays = relayState
         .map((on, i) => on ? i + 1 : null)
         .filter(n => n !== null);
