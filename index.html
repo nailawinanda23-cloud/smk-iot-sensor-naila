@@ -166,7 +166,8 @@
           <span class="sensor-trend" id="temp-trend"></span>
         </div>
         <div class="sbar"><div id="sb" class="sfill"></div></div>
-        <div class="shint">Range: 0 – 50 °C &nbsp;|&nbsp; <span id="temp-status">—</span></div>
+        <!-- DIUBAH: teks range disesuaikan dengan logika Arduino -->
+        <div class="shint">Normal 20–25°C &nbsp;·&nbsp; Hangat 26–30°C &nbsp;·&nbsp; Panas >30°C &nbsp;|&nbsp; <span id="temp-status">—</span></div>
       </div>
       <div class="card sensor-card">
         <div class="clabel">Kelembapan — DHT11 (GPIO 23)</div>
@@ -224,7 +225,8 @@
         </div>
         <div class="legend-item">
           <span class="legend-dot" style="background:#f87171;box-shadow:0 0 6px rgba(248,113,113,.6)"></span>
-          ≥31°C MERAH
+          <!-- DIUBAH: dari ≥31°C jadi >30°C, sesuai Arduino (suhu > 30) -->
+          >30°C MERAH
         </div>
         <div class="legend-item">
           <span class="legend-dot" style="background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.6)"></span>
