@@ -104,7 +104,6 @@ function rebuildTable() {
   tb.innerHTML = history.length
     ? ''
     : '<tr><td colspan="7" class="no-data">Belum ada data diterima.</td></tr>';
-  // Tampilkan urutan asli: index 0 (paling lama) di atas
   history.forEach(r => tb.appendChild(makeRow(r)));
   g('chk-all').checked = false;
   g('del-btn').disabled = true;
@@ -132,14 +131,21 @@ function makeRow(r) {
   return tr;
 }
 
-function addTableRow(now, suhu, hum, cahaya, ledRaw) {
-  const names  = ['LED1','LED2','LED3','LED4'];
-  let aktif    = [];
-  if (typeof ledRaw === 'string' && /^[01]{4}$/.test(ledRaw)) {
-    ledRaw.split('').forEach((v, i) => { if (v === '1') aktif.push(names[i]); });
-  } else if (Array.isArray(ledRaw)) {
-    ledRaw.forEach(n => { if (n >= 1 && n <= 4) aktif.push(names[n - 1]); });
+function addTableRow(now, suhu, hum, cahaya, activeRelays) {
+  // activeRelays = array angka relay yang ON, misal [2, 4] artinya LED2 dan LED4
+  const names = ['LED1','LED2','LED3','LED4'];
+  let aktif = [];
+
+  if (Array.isArray(activeRelays)) {
+    // Format array index 1-based: [1, 3] → LED1, LED3
+    activeRelays.forEach(n => {
+      if (n >= 1 && n <= 4) aktif.push(names[n - 1]);
+    });
+  } else if (typeof activeRelays === 'string' && /^[01]{4}$/.test(activeRelays)) {
+    // Format string biner "1010" → LED1, LED3
+    activeRelays.split('').forEach((v, i) => { if (v === '1') aktif.push(names[i]); });
   }
+
   const row = {
     id:     nextId++,
     ts:     now.toLocaleTimeString('id-ID', { hour12: false }),
@@ -149,18 +155,15 @@ function addTableRow(now, suhu, hum, cahaya, ledRaw) {
     led:    aktif.length ? aktif.join(', ') : '-'
   };
 
-  // ✅ PERBAIKAN: push ke akhir array (data lama tetap di depan)
   history.push(row);
-  if (history.length > MAX_ROWS) history.shift(); // buang yang paling lama jika melebihi batas
+  if (history.length > MAX_ROWS) history.shift();
 
   const tb    = g('tbl-body');
   const noRow = tb.querySelector('.no-data');
   if (noRow) noRow.parentElement.remove();
 
-  // ✅ PERBAIKAN: appendChild agar baris baru muncul di BAWAH tabel
   tb.appendChild(makeRow(row));
 
-  // ✅ PERBAIKAN: hapus baris pertama (paling lama) jika melebihi MAX_ROWS
   while (tb.children.length > MAX_ROWS) tb.removeChild(tb.firstChild);
 
   updateSelInfo();
@@ -239,7 +242,7 @@ function toggleRelay(relayNum) {
     return;
   }
 
-  const idx     = relayNum - 1;
+  const idx      = relayNum - 1;
   const newState = !relayState[idx];
   const payload  = JSON.stringify({ relay: relayNum, state: newState });
 
@@ -249,7 +252,7 @@ function toggleRelay(relayNum) {
     cl.send(msg);
     addLog('CMD', `→ Relay ${relayNum} : ${newState ? 'ON' : 'OFF'}`);
 
-    // Update state lokal langsung (feedback cepat di UI, sebelum ESP32 reply)
+    // Update state lokal langsung (feedback cepat di UI)
     relayState[idx] = newState;
     applyRelayUI(idx, newState);
   } catch(e) {
@@ -395,12 +398,14 @@ function onMsg(m) {
 
     if (mode === 'manual') {
       // ── MODE MANUAL ──────────────────────────────────────────
-      const led = parseLed(d.led);
-      addLog('MODE', 'MANUAL');
-      addLog('LED',  `L1:${+led[0]} L2:${+led[1]} L3:${+led[2]} L4:${+led[3]}`);
       // Sinkronisasi state relay lokal dari data ESP32
-      relayState = [...led];
-      updLEDs(led, 'manual');
+      // (hanya update dari ESP32 jika tidak ada aksi web baru)
+      const ledFromESP = parseLed(d.led);
+      addLog('MODE', 'MANUAL');
+      addLog('LED',  `L1:${+ledFromESP[0]} L2:${+ledFromESP[1]} L3:${+ledFromESP[2]} L4:${+ledFromESP[3]}`);
+      // Sinkronisasi relayState dari ESP32 (sumber kebenaran)
+      relayState = [...ledFromESP];
+      updLEDs(ledFromESP, 'manual');
       setSystemState('manual');
 
     } else {
@@ -421,10 +426,16 @@ function onMsg(m) {
       cekAlert(suhu);
     }
 
+    // ── Tambah ke tabel menggunakan relayState yang sudah sinkron ──
     if (Date.now() - lastTblTime >= TBL_INT) {
-      addTableRow(now, suhu, hum, cahaya, d.led);
       lastTblTime = Date.now();
+      // Konversi relayState [true,false,true,true] → [1,3,4] (1-indexed)
+      const activeRelays = relayState
+        .map((on, i) => on ? i + 1 : null)
+        .filter(n => n !== null);
+      addTableRow(now, suhu, hum, cahaya, activeRelays);
     }
+
   } catch(e) {
     addLog('ERR', 'JSON Error: ' + e.message);
   }
@@ -499,17 +510,8 @@ function setSystemState(state, suhu) {
 
 /* ============================================================
    LED UPDATE
-   Mode Auto  — sesuai range suhu + LED4 selalu ON
-   Mode Manual — sesuai bit dari ESP32 (sinkron dua arah)
-
-   PIN MAP (sesuai Arduino):
-     LED/Relay 1 → GPIO 4   (Hijau,  20–25°C)
-     LED/Relay 2 → GPIO 18  (Kuning, 26–30°C)
-     LED/Relay 3 → GPIO 19  (Merah,  ≥31°C)
-     LED/Relay 4 → GPIO 21  (Hijau,  Indikator)
    ============================================================ */
 function updLEDs(state, mode, suhu) {
-  /* reset semua ke OFF */
   const offClass = ['off-g', 'off-y', 'off-r', 'off-g'];
   [1, 2, 3, 4].forEach(i => {
     g('l'  + i).className   = 'lorb ' + offClass[i - 1];
@@ -520,7 +522,6 @@ function updLEDs(state, mode, suhu) {
   });
 
   if (mode === 'manual') {
-    /* mode manual: nyalakan sesuai bit dari ESP32 */
     const colorClass   = ['green',  'yellow', 'red',  'green'];
     const onStateClass = ['on-g',   'on-y',   'on-r', 'on-g'];
     const gpioLabels   = ['GPIO 4', 'GPIO 18','GPIO 19','GPIO 21'];
@@ -535,7 +536,6 @@ function updLEDs(state, mode, suhu) {
       }
     });
   } else {
-    /* mode auto: label sesuai range suhu */
     g('lb1').textContent = '20–25°C (GPIO 4)';
     g('lb2').textContent = '26–30°C (GPIO 18)';
     g('lb3').textContent = '≥31°C   (GPIO 19)';
@@ -555,7 +555,6 @@ function updLEDs(state, mode, suhu) {
       g('ls3').className   = 'lstate on-r';
     }
 
-    /* LED 4 selalu menyala hijau di mode auto */
     g('l4').className    = 'lorb green';
     g('ls4').textContent = 'Aktif';
     g('ls4').className   = 'lstate on-g';
@@ -573,7 +572,7 @@ function cekAlert(suhu) {
     const map = {
       NORMAL: ['● Suhu Normal (20–25°C)', 'green'],
       SEDANG: ['● Suhu Sedang (26–30°C)', 'yellow'],
-      PANAS:  ['● Suhu Panas (≥31°C)',    'red']
+      PANAS:  ['● Suhu Panas (≥30°C)',    'red']
     };
     showAlert(...map[s]);
   }
