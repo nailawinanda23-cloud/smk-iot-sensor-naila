@@ -643,12 +643,23 @@ input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; width: 14px
   .tbl-actions { width: 100%; justify-content: flex-start; }
   .hero-title { font-size: 1.5rem; }
   .chart-wrap { height: 140px; }
-  .nav-right { gap: 6px; }
-  #badge { display: none; }
+  .nav-right { gap: 4px; }
+  /* DIUBAH: badge tetap tampil di HP, ukuran lebih kecil */
+  #badge {
+    display: flex;
+    font-size: .48rem;
+    letter-spacing: 1px;
+    padding: 4px 8px;
+    gap: 5px;
+  }
+  #dot { width: 6px; height: 6px; }
+  /* Sembunyikan teks badge, cukup tampilkan dot + status singkat */
+  #btext { display: inline; }
   .hot-warning-banner { flex-wrap: wrap; gap: 10px; }
 }
 
 @media (max-width: 360px) {
   .g4 { grid-template-columns: 1fr 1fr; }
   .enter-btn { font-size: .8rem; }
+  #badge { font-size: .44rem; padding: 3px 6px; }
 }
