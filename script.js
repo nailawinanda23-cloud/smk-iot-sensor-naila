@@ -583,6 +583,8 @@ function parseLed(led) {
 }
 
 function updSensor(suhu, hum) {
+  const isHot = suhu > 30;
+
   // ── Trend suhu ──
   if (lastTemp !== null) {
     const diff  = suhu - lastTemp;
@@ -618,9 +620,21 @@ function updSensor(suhu, hum) {
   lastTemp = suhu;
   lastHum  = hum;
 
-  g('sv').textContent = suhu.toFixed(1);
+  // ── Update angka suhu + warna merah jika PANAS ──
+  const svEl = g('sv');
+  const sbEl = g('sb');
+  svEl.textContent = suhu.toFixed(1);
+
+  if (isHot) {
+    svEl.classList.add('hot');
+    sbEl.classList.add('hot-bar');
+  } else {
+    svEl.classList.remove('hot');
+    sbEl.classList.remove('hot-bar');
+  }
+
   g('hv').textContent = hum.toFixed(1);
-  g('sb').style.width = Math.min(100, (suhu / 50) * 100) + '%';
+  sbEl.style.width    = Math.min(100, (suhu / 50) * 100) + '%';
   g('hb').style.width = Math.min(100, hum) + '%';
 
   // ── Status suhu: sinkron dengan Arduino ──
