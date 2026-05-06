@@ -40,11 +40,18 @@ let chartHum        = null;
 /* ── HELPER ── */
 const g = id => document.getElementById(id);
 
-/* ── HELPER: Dapatkan label status suhu ── */
+/* ── HELPER: Dapatkan label status suhu ──
+ *  Sinkron dengan logika Arduino (mode AUTO):
+ *    < 20°C          → Dingin  (tidak ada LED menyala)
+ *    20 – 25°C       → Normal  (LED 1 Hijau)
+ *    > 25 – 30°C     → Hangat  (LED 2 Kuning)
+ *    > 30°C          → Panas   (LED 3 Merah)
+ */
 function getTempStatus(suhu) {
-  if (suhu <= 25) return { label: 'Sejuk 🟢',  key: 'SEJUK'  };
-  if (suhu <= 30) return { label: 'Hangat 🟡', key: 'HANGAT' };
-  return                { label: 'Panas 🔴',   key: 'PANAS'  };
+  if (suhu < 20)                return { label: 'Dingin 🔵',  key: 'DINGIN' };
+  if (suhu >= 20 && suhu <= 25) return { label: 'Normal 🟢',  key: 'NORMAL' };
+  if (suhu >  25 && suhu <= 30) return { label: 'Hangat 🟡',  key: 'HANGAT' };
+  return                        { label: 'Panas 🔴',    key: 'PANAS'  };
 }
 
 /* ============================================================
@@ -260,7 +267,6 @@ function rebuildTable() {
   tb.innerHTML = history.length
     ? ''
     : '<tr><td colspan="7" class="no-data">Belum ada data diterima.</td></tr>';
-  // Tampilkan terbaru di atas, nomor urut dari 1
   [...history].reverse().forEach((r, i) => tb.appendChild(makeRow(r, i + 1)));
   g('chk-all').checked = false;
   g('del-btn').disabled = true;
@@ -298,7 +304,7 @@ function addTableRow(now, suhu, hum, cahaya, activeRelays) {
   }
 
   const row = {
-    id:     now.getTime(),   // unique key untuk checkbox, tidak ditampilkan
+    id:     now.getTime(),
     ts:     now.toLocaleTimeString('id-ID', { hour12: false }),
     suhu:   suhu != null ? suhu.toFixed(1) : '-',
     hum:    hum  != null ? hum.toFixed(1)  : '-',
@@ -307,23 +313,19 @@ function addTableRow(now, suhu, hum, cahaya, activeRelays) {
   };
 
   history.push(row);
-  if (history.length > MAX_ROWS) history.shift(); // buang data terlama
+  if (history.length > MAX_ROWS) history.shift();
 
   const tb    = g('tbl-body');
   const noRow = tb.querySelector('.no-data');
   if (noRow) noRow.parentElement.remove();
 
-  // Nomor urut = history.length (ini data terbaru = no 1 di tampilan)
-  // Sisipkan di ATAS tabel
   tb.insertBefore(makeRow(row, 1), tb.firstChild);
 
-  // Perbarui nomor urut semua baris yang sudah ada (geser +1)
   [...tb.querySelectorAll('tr[data-id]')].forEach((tr, i) => {
     const numCell = tr.querySelector('td:nth-child(2)');
     if (numCell) numCell.textContent = i + 1;
   });
 
-  // Buang baris terbawah jika melebihi MAX_ROWS
   while (tb.children.length > MAX_ROWS) tb.removeChild(tb.lastChild);
 
   updateSelInfo();
@@ -542,16 +544,16 @@ function onMsg(m) {
       if (suhu == null || hum == null) return;
       setSystemState('auto', suhu);
       updLEDs(null, 'auto', suhu);
+      // Sinkron persis dengan Arduino mode AUTO
       relayState = [
-        suhu >= 20 && suhu <= 25,
-        suhu >  25 && suhu <= 30,
-        suhu >  30,
-        true
+        suhu >= 20 && suhu <= 25,   // LED1 Hijau  — Normal
+        suhu >  25 && suhu <= 30,   // LED2 Kuning — Hangat
+        suhu >  30,                 // LED3 Merah  — Panas
+        true                        // LED4 selalu ON
       ];
       cekAlert(suhu);
     }
 
-    // Update tabel
     if (Date.now() - lastTblTime >= TBL_INT) {
       lastTblTime = Date.now();
       const activeRelays = relayState
@@ -621,7 +623,7 @@ function updSensor(suhu, hum) {
   g('sb').style.width = Math.min(100, (suhu / 50) * 100) + '%';
   g('hb').style.width = Math.min(100, hum) + '%';
 
-  // ── Status suhu: Sejuk / Hangat / Panas ──
+  // ── Status suhu: sinkron dengan Arduino ──
   const { label: tempStatusLabel } = getTempStatus(suhu);
   const humStatus = hum < 30 ? 'Kering 🟡' : hum <= 70 ? 'Normal 🟢' : 'Lembap 🔵';
   g('temp-status').textContent = tempStatusLabel;
@@ -701,11 +703,13 @@ function updLEDs(state, mode, suhu) {
       }
     });
   } else {
+    // Label badge sesuai range Arduino
     g('lb1').textContent = '20–25°C (GPIO 4)';
     g('lb2').textContent = '26–30°C (GPIO 18)';
-    g('lb3').textContent = '≥31°C   (GPIO 19)';
+    g('lb3').textContent = '>30°C   (GPIO 19)';
     g('lb4').textContent = 'INDIKATOR (GPIO 21)';
 
+    // Sinkron dengan Arduino: >= 20 && <= 25 → LED1, > 25 && <= 30 → LED2, > 30 → LED3
     if (suhu >= 20 && suhu <= 25) {
       g('l1').className    = 'lorb green';
       g('ls1').textContent = 'Menyala';
@@ -719,7 +723,9 @@ function updLEDs(state, mode, suhu) {
       g('ls3').textContent = 'Menyala';
       g('ls3').className   = 'lstate on-r';
     }
+    // Suhu < 20 → tidak ada LED 1/2/3 yang menyala (sudah di-reset di atas)
 
+    // LED 4 selalu menyala (indikator) — sama dengan Arduino target[3] = true
     g('l4').className    = 'lorb green';
     g('ls4').textContent = 'Aktif';
     g('ls4').className   = 'lstate on-g';
@@ -731,18 +737,14 @@ function updLEDs(state, mode, suhu) {
 /* ============================================================
    ALERT — CEK SUHU & PERINGATAN PANAS
    ============================================================ */
-
-/* Banner peringatan panas yang persisten di dalam dashboard */
 let hotBannerShown = false;
 
 function showHotWarning(suhu) {
-  // Tampilkan banner peringatan di halaman jika belum ada
   if (!hotBannerShown) {
     hotBannerShown = true;
     const container = document.querySelector('.container');
     if (!container) return;
 
-    // Hapus banner lama jika ada
     const old = document.getElementById('hot-warning-banner');
     if (old) old.remove();
 
@@ -753,17 +755,15 @@ function showHotWarning(suhu) {
       <div class="hot-warning-icon">🔥</div>
       <div class="hot-warning-content">
         <div class="hot-warning-title">PERINGATAN: SUHU TERLALU PANAS!</div>
-        <div class="hot-warning-sub">Suhu saat ini <strong>${suhu.toFixed(1)}°C</strong> — melebihi batas aman (≥31°C). Segera ambil tindakan pendinginan!</div>
+        <div class="hot-warning-sub">Suhu saat ini <strong>${suhu.toFixed(1)}°C</strong> — melebihi batas aman (>30°C). Segera ambil tindakan pendinginan!</div>
       </div>
       <button class="hot-warning-close" onclick="dismissHotWarning()">✕</button>
     `;
 
-    // Sisipkan di awal container (setelah elemen pertama / g2 pertama)
     container.insertBefore(banner, container.firstChild);
   } else {
-    // Perbarui nilai suhu di banner yang sudah ada
     const sub = document.querySelector('#hot-warning-banner .hot-warning-sub');
-    if (sub) sub.innerHTML = `Suhu saat ini <strong>${suhu.toFixed(1)}°C</strong> — melebihi batas aman (≥31°C). Segera ambil tindakan pendinginan!`;
+    if (sub) sub.innerHTML = `Suhu saat ini <strong>${suhu.toFixed(1)}°C</strong> — melebihi batas aman (>30°C). Segera ambil tindakan pendinginan!`;
   }
 }
 
@@ -787,21 +787,21 @@ function cekAlert(suhu) {
   const { key } = getTempStatus(suhu);
 
   if (key !== lastStatus) {
+    // Label alert sinkron dengan range Arduino
     const map = {
-      SEJUK:  ['🟢 Suhu Sejuk (20–25°C)',  'green'],
-      HANGAT: ['🟡 Suhu Hangat (26–30°C)', 'yellow'],
-      PANAS:  ['🔴 Suhu Panas (≥31°C) — BAHAYA!', 'red']
+      DINGIN: ['🔵 Suhu Dingin (<20°C)',          'yellow'],
+      NORMAL: ['🟢 Suhu Normal (20–25°C)',         'green'],
+      HANGAT: ['🟡 Suhu Hangat (26–30°C)',         'yellow'],
+      PANAS:  ['🔴 Suhu Panas (>30°C) — BAHAYA!', 'red']
     };
     if (map[key]) showAlert(...map[key]);
 
-    // Tampilkan / sembunyikan banner peringatan panas
     if (key === 'PANAS') {
       showHotWarning(suhu);
     } else {
       hideHotWarning();
     }
   } else if (key === 'PANAS') {
-    // Perbarui nilai suhu di banner meski status tidak berubah
     showHotWarning(suhu);
   }
 
