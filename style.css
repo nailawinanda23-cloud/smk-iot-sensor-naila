@@ -300,17 +300,17 @@ body {
 .card {
   background: var(--surface); border-radius: var(--r);
   border: 1px solid var(--border2); box-shadow: var(--shadow);
-  padding: 18px 20px; transition: box-shadow .2s, border-color .2s, background .3s;
+  padding: 24px 26px; transition: box-shadow .2s, border-color .2s, background .3s;
 }
 .card:hover { box-shadow: var(--shadow-md); border-color: var(--teal-md); }
 
 .clabel {
-  font-family: var(--mono); font-size: .58rem; letter-spacing: 2.5px; font-weight: 600;
-  text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
+  font-family: var(--mono); font-size: .65rem; letter-spacing: 2.5px; font-weight: 700;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 18px;
   display: flex; align-items: center; gap: 8px;
 }
 .clabel::before {
-  content: ''; display: inline-block; width: 3px; height: 14px; border-radius: 3px;
+  content: ''; display: inline-block; width: 3px; height: 16px; border-radius: 3px;
   background: linear-gradient(180deg, var(--teal), var(--lav)); flex-shrink: 0;
 }
 
@@ -319,59 +319,106 @@ body {
 .g4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
 
 /* ══════════════════════════════════════════
-   STATUS
+   STATUS — DIPERBESAR
    ══════════════════════════════════════════ */
-.status-wrap { display: flex; align-items: center; gap: 14px; }
+.status-wrap { display: flex; align-items: center; gap: 18px; }
 .status-ring {
-  width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0;
+  width: 68px; height: 68px; border-radius: 18px; flex-shrink: 0;
   background: var(--surface2); border: 1.5px solid var(--border2);
   display: flex; align-items: center; justify-content: center; transition: all .4s;
 }
-.status-ring.on { background: var(--green-lt); border-color: rgba(52,211,153,.4); box-shadow: 0 0 0 4px rgba(52,211,153,.08); }
-#sval { font-weight: 800; font-size: 1.4rem; color: var(--dim); letter-spacing: -.5px; transition: color .3s; }
+.status-ring svg { width: 26px; height: 26px; }
+.status-ring.on { background: var(--green-lt); border-color: rgba(52,211,153,.4); box-shadow: 0 0 0 6px rgba(52,211,153,.08); }
+
+#sval {
+  font-weight: 900; font-size: 2rem; color: var(--dim);
+  letter-spacing: -.5px; transition: color .3s; line-height: 1;
+}
 #sval.on { color: var(--green); }
-#snote { font-size: .7rem; color: var(--text3); margin-top: 3px; font-weight: 500; }
+
+#snote {
+  font-size: .82rem; color: var(--text2); margin-top: 6px;
+  font-weight: 600; line-height: 1.4;
+}
 
 /* ══════════════════════════════════════════
-   LDR
+   LDR — DIPERBESAR
    ══════════════════════════════════════════ */
-.ldr-row { display: flex; align-items: center; gap: 14px; }
+.ldr-row { display: flex; align-items: center; gap: 18px; }
 .ldr-box {
-  width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0;
+  width: 68px; height: 68px; border-radius: 18px; flex-shrink: 0;
   background: var(--surface2); border: 1.5px solid var(--border2);
-  display: flex; align-items: center; justify-content: center; font-size: 22px; transition: all .3s;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; transition: all .3s;
 }
 .ldr-box.terang { background: var(--amber-lt); border-color: rgba(251,191,36,.35); }
 .ldr-box.gelap  { background: var(--sky-lt);   border-color: rgba(56,189,248,.3); }
+
 .ldr-pill {
-  font-family: var(--mono); font-size: .78rem; font-weight: 700; letter-spacing: 2px;
-  padding: 7px 18px; border-radius: 9px;
-  background: var(--surface2); border: 1.5px solid var(--border2); color: var(--muted); transition: all .3s;
+  font-family: var(--mono); font-size: 1rem; font-weight: 800; letter-spacing: 3px;
+  padding: 10px 24px; border-radius: 12px;
+  background: var(--surface2); border: 1.5px solid var(--border2);
+  color: var(--muted); transition: all .3s;
 }
 .ldr-pill.terang { background: var(--amber-lt); border-color: rgba(251,191,36,.4); color: var(--amber); }
 .ldr-pill.gelap  { background: var(--sky-lt);   border-color: rgba(56,189,248,.35); color: var(--sky); }
-.ldr-hint { font-family: var(--mono); font-size: .56rem; color: var(--muted); margin-top: 4px; }
+.ldr-hint { font-family: var(--mono); font-size: .65rem; color: var(--muted); margin-top: 6px; font-weight: 500; }
 
 /* ══════════════════════════════════════════
-   SENSOR CARDS
+   SENSOR CARDS — DIPERBESAR + WARNA MERAH
    ══════════════════════════════════════════ */
 .sensor-card { position: relative; }
-.sensor-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 12px; }
-.snum  { font-weight: 800; font-size: 3rem; color: var(--teal); line-height: 1; letter-spacing: -2px; }
+
+.sensor-row {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 16px;
+}
+
+/* Angka suhu default = teal */
+.snum {
+  font-weight: 900; font-size: 4.2rem; color: var(--teal);
+  line-height: 1; letter-spacing: -3px;
+  transition: color .4s ease;
+}
+/* Angka suhu merah saat panas (ditambahkan class .hot dari JS) */
+.snum.hot {
+  color: #f87171;
+  text-shadow: 0 0 28px rgba(248,113,113,0.45), 0 0 8px rgba(248,113,113,0.25);
+}
 .snum.hum { color: var(--sky); }
-.sunit { font-size: .95rem; color: var(--text3); padding-bottom: 4px; font-weight: 600; }
+
+.sunit {
+  font-size: 1.15rem; color: var(--text3);
+  padding-bottom: 6px; font-weight: 700;
+}
+
 .sensor-trend {
-  font-family: var(--mono); font-size: .7rem; font-weight: 600; margin-left: 4px;
-  padding: 2px 7px; border-radius: 6px; align-self: center;
+  font-family: var(--mono); font-size: .75rem; font-weight: 700; margin-left: 6px;
+  padding: 3px 10px; border-radius: 8px; align-self: center;
 }
 .sensor-trend.up   { color: var(--rose);  background: var(--rose-lt);  }
 .sensor-trend.down { color: var(--green); background: var(--green-lt); }
 .sensor-trend.same { color: var(--muted); background: var(--surface2); }
-.sbar  { height: 7px; background: var(--surface2); border-radius: 6px; overflow: hidden; margin-bottom: 8px; border: 1px solid var(--border); }
-.sfill { height: 100%; border-radius: 6px; width: 0%; background: linear-gradient(90deg, var(--teal), #0891b2); transition: width .6s cubic-bezier(.4,0,.2,1); }
+
+.sbar {
+  height: 10px; background: var(--surface2); border-radius: 8px;
+  overflow: hidden; margin-bottom: 12px; border: 1px solid var(--border);
+}
+.sfill {
+  height: 100%; border-radius: 8px; width: 0%;
+  background: linear-gradient(90deg, var(--teal), #0891b2);
+  transition: width .6s cubic-bezier(.4,0,.2,1), background .4s ease;
+}
+/* Bar merah saat suhu panas */
+.sfill.hot-bar {
+  background: linear-gradient(90deg, #f87171, #ef4444);
+}
 .sfill.hum { background: linear-gradient(90deg, #0284c7, #38bdf8); }
-.shint { font-family: var(--mono); font-size: .58rem; color: var(--text3); font-weight: 500; }
-.shint span { font-weight: 700; }
+
+.shint {
+  font-family: var(--mono); font-size: .65rem; color: var(--text3);
+  font-weight: 600; line-height: 1.6;
+}
+.shint span { font-weight: 800; font-size: .72rem; }
 
 /* ══════════════════════════════════════════
    CHART
@@ -627,11 +674,13 @@ input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; width: 14px
   .g2 { grid-template-columns: 1fr; }
   .g3 { grid-template-columns: 1fr 1fr; }
   .g4 { grid-template-columns: 1fr 1fr; }
-  .snum { font-size: 2.4rem; }
+  .snum { font-size: 3rem; }
   .nav { padding: 0 14px; }
   .nav-brand-text { display: none; }
   .chart-wrap { height: 160px; }
   .hot-warning-icon { font-size: 1.5rem; }
+  .status-ring { width: 56px; height: 56px; }
+  .ldr-box { width: 56px; height: 56px; }
 }
 
 @media (max-width: 480px) {
@@ -644,7 +693,6 @@ input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; width: 14px
   .hero-title { font-size: 1.5rem; }
   .chart-wrap { height: 140px; }
   .nav-right { gap: 4px; }
-  /* DIUBAH: badge tetap tampil di HP, ukuran lebih kecil */
   #badge {
     display: flex;
     font-size: .48rem;
@@ -653,7 +701,6 @@ input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; width: 14px
     gap: 5px;
   }
   #dot { width: 6px; height: 6px; }
-  /* Sembunyikan teks badge, cukup tampilkan dot + status singkat */
   #btext { display: inline; }
   .hot-warning-banner { flex-wrap: wrap; gap: 10px; }
 }
