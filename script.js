@@ -4,10 +4,10 @@
    ============================================================ */
 
 /* ── KONFIGURASI MQTT ── */
-const BROKER    = 'b93d41ad7b6242dbb8659cb6dce95f18.s1.eu.hivemq.cloud';
+const BROKER    = 'b338e112c7b54236bc6ebddb85504b3b.s1.eu.hivemq.cloud';
 const PORT      = 8883;
-const USERNAME  = 'Dinar';
-const PASSWORD  = 'DinarSiot1';
+const USERNAME  = 'nailawinanda';
+const PASSWORD  = 'Naila_ukk1';
 const TOPIC_SUB = 'smk/iot/sensor';
 const TOPIC_CMD = 'smk/iot/relay/cmd';
 const TBL_INT   = 2000;
