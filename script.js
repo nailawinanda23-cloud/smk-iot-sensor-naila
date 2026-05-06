@@ -5,7 +5,7 @@
 
 /* ── KONFIGURASI MQTT ── */
 const BROKER    = 'b338e112c7b54236bc6ebddb85504b3b.s1.eu.hivemq.cloud';
-const PORT      = 8883;
+const PORT      = 8884;
 const USERNAME  = 'nailawinanda';
 const PASSWORD  = 'Naila_ukk1';
 const TOPIC_SUB = 'smk/iot/sensor';
